@@ -1,7 +1,13 @@
 # retail-store
 
 This application calculates the Net Payable of an order after applying the
-maximum discount applicable on an Orde the order
+maximum discount applicable on the order
+
+# Assumptions
+1. User is valid and already logged in
+2. Discount percentages to be made easily modified
+3. Whether a user is an employee of the store is already captured
+4. Inclusion and exclusion of Item types(groceries, electronics etc) to be made easily modified 
 
 # Getting Started 
 
