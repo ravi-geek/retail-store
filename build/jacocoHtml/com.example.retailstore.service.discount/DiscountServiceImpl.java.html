@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DiscountServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">retail-store</a> &gt; <a href="index.source.html" class="el_package">com.example.retailstore.service.discount</a> &gt; <span class="el_source">DiscountServiceImpl.java</span></div><h1>DiscountServiceImpl.java</h1><pre class="source lang-java linenums">package com.example.retailstore.service.discount;
+
+import com.example.retailstore.dto.DiscountResponse;
+import com.example.retailstore.dto.Order;
+import com.example.retailstore.dto.PurchaseItem;
+import com.example.retailstore.entity.Customer;
+import com.example.retailstore.entity.Discount;
+import com.example.retailstore.entity.ItemType;
+import com.example.retailstore.repository.DiscountRepository;
+import com.example.retailstore.service.ServiceConstants;
+import com.example.retailstore.service.customer.CustomerService;
+import com.example.retailstore.service.item.type.ItemTypeService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+<span class="fc" id="L23">@RequiredArgsConstructor</span>
+<span class="fc" id="L24">@Slf4j</span>
+public class DiscountServiceImpl implements DiscountService {
+
+    private final CustomerService customerService;
+    private final ItemTypeService itemTypeService;
+    private final DiscountRepository discountRepository;
+
+    /**
+     * Calculates the net payable amount for an order, taking into account discounts based on customer type and total order amount.
+     *
+     * @param order The order for which to calculate the net payable amount.
+     * @return A DiscountResponse object containing the total order amount and the net payable amount after applying discounts.
+     */
+    @Override
+    public DiscountResponse calculateNetPayable(Order order) {
+<span class="fc" id="L39">        log.debug(&quot;Calculating net payable amount for order {}&quot;, order.customerId());</span>
+<span class="fc" id="L40">        Customer customer = customerService.findCustomerById(order.customerId());</span>
+<span class="fc" id="L41">        BigDecimal discountPercentage = calculateApplicableDiscountForCustomer(customer);</span>
+<span class="fc" id="L42">        BigDecimal totalOrderAmount = order.purchaseItems().stream().map(PurchaseItem::price).</span>
+<span class="fc" id="L43">                reduce(BigDecimal.ZERO, BigDecimal::add);</span>
+<span class="fc" id="L44">        log.debug(&quot;Total order amount for order {}: {}&quot;, order.customerId(), totalOrderAmount);</span>
+<span class="fc" id="L45">        BigDecimal percentageDiscountAmount = BigDecimal.ZERO;</span>
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        if(discountPercentage.intValue() &gt; 0)</span>
+<span class="fc" id="L47">            percentageDiscountAmount = calculatePercentageDiscountAmount(order.purchaseItems(), discountPercentage);</span>
+<span class="fc" id="L48">        log.debug(&quot;Percentage discount amount for order {}: {}&quot;, order.customerId(), percentageDiscountAmount);</span>
+<span class="fc" id="L49">        BigDecimal totalAfterPercentageDiscount = totalOrderAmount.subtract(percentageDiscountAmount);</span>
+<span class="fc" id="L50">        BigDecimal fixedDiscountAmount = totalAfterPercentageDiscount.divideToIntegralValue(ServiceConstants.TARGET_VALUE).</span>
+<span class="fc" id="L51">                multiply(ServiceConstants.FIXED_DISCOUNT_VALUE);</span>
+<span class="fc" id="L52">        log.debug(&quot;Fixed discount amount for order {}: {}&quot;, order.customerId(), fixedDiscountAmount);</span>
+<span class="fc" id="L53">        BigDecimal netPayable = totalAfterPercentageDiscount.subtract(fixedDiscountAmount);</span>
+<span class="fc" id="L54">        log.debug(&quot;Net payable amount for order {}: {}&quot;, order.customerId(), netPayable);</span>
+<span class="fc" id="L55">        return new DiscountResponse(totalOrderAmount, netPayable);</span>
+    }
+
+    /**
+     * Calculates the total discount amount based on the percentage discount applicable to eligible items in the purchase.
+     *
+     * @param purchaseItems      The set of purchase items for which to calculate the discount.
+     * @param discountPercentage The percentage of discount applicable to eligible items.
+     * @return The total discount amount based on the percentage discount.
+     */
+    private BigDecimal calculatePercentageDiscountAmount(Set&lt;PurchaseItem&gt; purchaseItems, BigDecimal discountPercentage) {
+<span class="fc" id="L66">        Map&lt;String, Boolean&gt; itemTypes = itemTypeService.findAll().stream().collect(Collectors.toMap(ItemType::getCode, ItemType::isDiscountApplicable));</span>
+<span class="fc" id="L67">        BigDecimal totalOfItemsEligibleForDiscount = purchaseItems.stream().filter(item -&gt; itemTypes.get(item.itemTypeCode())).map(PurchaseItem::price).</span>
+<span class="fc" id="L68">                reduce(BigDecimal.ZERO, BigDecimal::add);</span>
+<span class="fc" id="L69">        return totalOfItemsEligibleForDiscount.multiply(discountPercentage).divide(BigDecimal.valueOf(100));</span>
+    }
+
+    /**
+     * Calculates the applicable discount percentage for a given customer based on their attributes such as employee status, affiliate status, and longevity as a customer.
+     *
+     * @param customer The customer for whom to calculate the applicable discount.
+     * @return The applicable discount percentage based on the customer's attributes.
+     */
+    private BigDecimal calculateApplicableDiscountForCustomer(Customer customer) {
+<span class="fc" id="L79">        Set&lt;String&gt; discountCode = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (customer.isEmployee()) {</span>
+<span class="fc" id="L81">            discountCode.add(ServiceConstants.EMPLOYEE_DISCOUNT_CODE);</span>
+        }
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        if (Optional.ofNullable(customer.getAffiliateCustomer()).isPresent()) {</span>
+<span class="fc" id="L84">            discountCode.add(ServiceConstants.AFFILIATE_DISCOUNT_CODE);</span>
+        }
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (customer.getCreatedDate().isBefore(LocalDate.now().minusYears(ServiceConstants.TWO_YEARS))){</span>
+<span class="fc" id="L87">            discountCode.add(ServiceConstants.LONG_TERM_CUSTOMER_DISCOUNT_CODE);</span>
+        }
+<span class="fc" id="L89">        Optional&lt;Discount&gt; maxDiscount = discountCode.stream().map(discountRepository::findByCode).</span>
+<span class="fc" id="L90">                max(Comparator.comparing(Discount::getDiscountPercentageValue));</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        return maxDiscount.isPresent() ? maxDiscount.get().getDiscountPercentageValue() : BigDecimal.ZERO;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
